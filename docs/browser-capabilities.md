@@ -15,3 +15,18 @@ and dual configurations. Both individual backends painted an actual GPUI canvas
 in Chromium 154 on Linux software graphics. This is correctness evidence, not a
 hardware performance comparison. Native and other-browser validation are tracked
 separately and are not implied by these checks.
+
+## Image and SVG capabilities
+
+Core defaults preserve `image-formats`, `svg-text` and `svg-raster`. Disabling
+these retains PNG and path-based SVG icons, while ordinary bitmap frame buffers
+are unaffected. Unsupported image formats return decoder errors. The compact SVG
+profile rejects text and embedded images before parsing rather than returning a
+partially rendered icon; embedded images require both SVG capabilities because
+nested SVG may itself contain text. Font resolution and its original tests live
+in `fast::svg_fonts`; full builds retain system and bundled font resolution.
+
+`parse_svg` and `render_single_frame` now return `anyhow::Result` so capability
+errors can be distinguished by their message from parser errors. Code explicitly
+annotating their old `usvg::Error` return type must update that annotation.
+`render_parsed` still returns `usvg::Error`. Default rendering behavior is kept.

@@ -43,3 +43,9 @@ mod tests;
 
 #[cfg(target_family = "wasm")]
 pub(crate) mod dynamic_surface;
+
+pub(crate) mod image_codecs;
+
+pub(crate) mod svg_capabilities;
+#[cfg(feature = "svg-text")]
+pub(crate) mod svg_fonts;
