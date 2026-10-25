@@ -34,3 +34,16 @@ pixels, pause, later-task paused redraw, seek, rectangular/rounded clipping,
 ordinary GPUI occlusion, source release, same-device submission and importing-task
 submission. Both forced modes pass without GPU errors. These checks establish
 correctness, not a hardware performance recommendation or Safari support.
+
+`paint_dynamic_surface_with_fit` supports Fill, Contain and Cover. Geometry is
+resolved from the current decoded dimensions during rendering, so a scene may be
+built before metadata arrives and remains valid when the source size changes.
+
+Stats distinguish a recoverable import exception from an unavailable draw:
+`unavailable` clears after a successful Copy fallback, while `device_lost` is
+terminal for that renderer. The device observer is detached when its cache is
+dropped; it does not replace the existing renderer error callback. Browser device
+destruction also stops the renderer. The host may show a DOM fallback and must
+request reload/recovery for the rest of the lost Canvas. Forced modes stay forced.
+Independent fault injection covers import rejection, copy rejection after prior
+successful draws, Auto fallback and actual GPUDevice.destroy().

@@ -26,10 +26,32 @@ impl DynamicSurfaceId {
     }
 }
 
+/// Fit is resolved from the current frame dimensions at presentation time.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DynamicSurfaceFit {
+    /// Stretch to the requested rectangle.
+    #[default]
+    Fill,
+    /// Preserve aspect ratio with space around the frame.
+    Contain,
+    /// Preserve aspect ratio and clip excess pixels to the rectangle.
+    Cover,
+}
+
 impl Window {
     /// Paint a dynamic source at the current scene order and content mask.
     /// The renderer skips identities whose producer has been released.
     pub fn paint_dynamic_surface(&mut self, bounds: Bounds<Pixels>, source: DynamicSurfaceId) {
+        self.paint_dynamic_surface_with_fit(bounds, source, DynamicSurfaceFit::Fill);
+    }
+
+    /// Paint a source whose decoded dimensions may become available later.
+    pub fn paint_dynamic_surface_with_fit(
+        &mut self,
+        bounds: Bounds<Pixels>,
+        source: DynamicSurfaceId,
+        fit: DynamicSurfaceFit,
+    ) {
         self.invalidator.debug_assert_paint();
         self.next_frame.scene.insert_primitive(PaintSurface {
             order: 0,
@@ -37,6 +59,7 @@ impl Window {
             content_mask: self.snapped_content_mask(),
             fast_dynamic_source: source,
             fast_dynamic_opacity: self.element_opacity,
+            fast_dynamic_fit: fit,
         });
     }
 

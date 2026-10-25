@@ -428,4 +428,4 @@ pub struct GpuSpecs {
 }
 
 #[cfg(target_family = "wasm")]
-pub use fast::dynamic_surface::DynamicSurfaceId;
+pub use fast::dynamic_surface::{DynamicSurfaceFit, DynamicSurfaceId};

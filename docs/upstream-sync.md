@@ -240,3 +240,7 @@ The additive browser API exports `DynamicSurfaceId`,
 in a UI-thread registry. This API extension is required to let producers update
 pixels in the existing ordered scene without rebuilding a document view.
 Apple pixel-buffer surfaces and native composition retain their existing APIs.
+The same browser API also exports `DynamicSurfaceFit` and
+`Window::paint_dynamic_surface_with_fit` so metadata and source-size changes need
+no scene rebuild. A one-line device-loss policy hook treats explicit browser
+GPUDevice destruction as terminal while preserving native teardown behavior.

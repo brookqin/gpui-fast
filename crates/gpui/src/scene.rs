@@ -770,6 +770,8 @@ pub struct PaintSurface {
     pub fast_dynamic_source: crate::fast::dynamic_surface::DynamicSurfaceId,
     #[cfg(target_family = "wasm")]
     pub fast_dynamic_opacity: f32,
+    #[cfg(target_family = "wasm")]
+    pub fast_dynamic_fit: crate::fast::dynamic_surface::DynamicSurfaceFit,
     pub order: DrawOrder,
     pub bounds: Bounds<ScaledPixels>,
     pub content_mask: ContentMask<ScaledPixels>,

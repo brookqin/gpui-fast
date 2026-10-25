@@ -27,6 +27,7 @@ pub(crate) struct SurfaceCache(RefCell<Cache>);
 struct Cache {
     pipelines: Option<Pipelines>,
     copies: HashMap<DynamicSurfaceId, CopyTexture>,
+    watch: Option<crate::fast::device_watch::DeviceWatch>,
 }
 struct CopyTexture {
     texture: wgpu::Texture,
@@ -173,15 +174,23 @@ impl SurfaceCache {
         let Some(source) = lookup(surface.fast_dynamic_source) else {
             return;
         };
+        if source.stats.borrow().device_lost {
+            return;
+        }
         if source.video.ready_state() < 2 {
             return;
         }
+        source.stats.borrow_mut().unavailable = true;
         if target.device.as_webgpu().is_none() {
             source
                 .failed("Dynamic video surfaces require WebGPU; select the host fallback on WebGL");
             return;
         }
         let mut cache = self.0.borrow_mut();
+        cache
+            .watch
+            .get_or_insert_with(|| crate::fast::device_watch::DeviceWatch::new(target.device))
+            .track(source.id);
         if cache.pipelines.is_none() {
             cache.pipelines = Some(Pipelines {
                 copy: Pipeline::new(target, false),
@@ -229,8 +238,21 @@ impl SurfaceCache {
         } else {
             &pipelines.copy
         };
-        let b = surface.bounds;
-        let m = surface.content_mask.bounds;
+        let fit = match surface.fast_dynamic_fit {
+            gpui::DynamicSurfaceFit::Fill => gpui::ObjectFit::Fill,
+            gpui::DynamicSurfaceFit::Contain => gpui::ObjectFit::Contain,
+            gpui::DynamicSurfaceFit::Cover => gpui::ObjectFit::Cover,
+        };
+        let b = fit
+            .get_bounds(
+                surface.bounds.map(|p| gpui::px(p.0)),
+                gpui::size(
+                    source.video.video_width().into(),
+                    source.video.video_height().into(),
+                ),
+            )
+            .map(|p| gpui::ScaledPixels(f32::from(p)));
+        let m = surface.content_mask.bounds.intersect(&surface.bounds);
         let data = [
             b.origin.x.0,
             b.origin.y.0,
@@ -281,6 +303,7 @@ impl SurfaceCache {
         pass.draw(0..4, 0..1);
         let mut stats = source.stats.borrow_mut();
         stats.draws += 1;
+        stats.unavailable = false;
         stats.actual_mode = Some(if external.is_some() {
             BrowserSurfaceMode::External
         } else {

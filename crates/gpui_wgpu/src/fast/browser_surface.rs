@@ -23,6 +23,10 @@ pub struct BrowserSurfaceStats {
     pub failures: u64,
     pub last_error: Option<String>,
     pub actual_mode: Option<BrowserSurfaceMode>,
+    /// The most recent draw could not provide pixels; successful fallback clears it.
+    pub unavailable: bool,
+    /// Device loss is terminal for this renderer; the host must recover or fall back.
+    pub device_lost: bool,
 }
 
 /// The last owner cancels callbacks and unregisters the source generation.
@@ -138,7 +142,7 @@ impl BrowserSurface {
 }
 
 impl Source {
-    fn changed(&self) {
+    pub(crate) fn changed(&self) {
         self.serial.set(self.serial.get().wrapping_add(1));
         (self.wake)();
     }

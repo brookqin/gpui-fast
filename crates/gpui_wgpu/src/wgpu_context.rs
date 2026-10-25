@@ -38,7 +38,7 @@ impl DeviceErrorState {
             let errors = Arc::clone(&errors);
             move |reason, message| {
                 log::error!("wgpu device lost: reason={reason:?}, message={message}");
-                if reason != wgpu::DeviceLostReason::Destroyed {
+                if crate::fast::device_errors::is_terminal(reason) {
                     errors.lost.store(true, Ordering::Relaxed);
                 }
             }
