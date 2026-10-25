@@ -50,7 +50,9 @@ wgpu = { workspace = true, features = ["std", "metal", "gles", "vulkan", "wgsl",
 wgpu = { workspace = true, default-features = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-web-sys = { workspace = true, features = ["HtmlCanvasElement"] }
+wasm-bindgen.workspace = true
+js-sys.workspace = true
+web-sys = { workspace = true, features = ["HtmlCanvasElement", "HtmlVideoElement", "HtmlMediaElement", "Window", "Event", "EventTarget"] }
 wgpu = { workspace = true, features = ["std"] }
 
 [dev-dependencies]

@@ -14,3 +14,6 @@ pub use wgpu_context::*;
 ))]
 pub use wgpu_renderer::WgpuHeadlessRenderer;
 pub use wgpu_renderer::{GpuContext, WgpuRenderer, WgpuSurfaceConfig};
+
+#[cfg(all(target_family = "wasm", feature = "webgpu"))]
+pub use fast::browser_surface::{BrowserSurface, BrowserSurfaceMode, BrowserSurfaceStats};

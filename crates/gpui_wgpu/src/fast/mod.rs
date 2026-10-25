@@ -20,3 +20,8 @@ pub(crate) mod rounded_clip;
 pub(crate) mod web_backends;
 
 pub(crate) mod shader_variants;
+
+#[cfg(all(target_family = "wasm", feature = "webgpu"))]
+pub(crate) mod dynamic_surface;
+#[cfg(all(target_family = "wasm", feature = "webgpu"))]
+pub(crate) mod browser_surface;

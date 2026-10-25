@@ -6,6 +6,8 @@
 //! odd translation pairs other pixels than the window does, so an edge
 //! pixel can come out one level apart (spec §5.6).
 //!
+//! Dynamic surfaces join paths in the overlay so frame updates never reuse
+//! stale tile pixels. Neither path introduces an intermediate video texture.
 //! Instead a layer's content is split in two. The *overlay* is every path,
 //! and every primitive drawn after something in the overlay that it
 //! overlaps; the tiles are rasterized from the rest. Each composited frame
@@ -69,7 +71,7 @@ pub(crate) fn split(
 ) -> Option<(Vec<PaintOperation>, Vec<Primitive>)> {
     let painted_path = operations
         .iter()
-        .any(|operation| matches!(operation, PaintOperation::Primitive(Primitive::Path(_))));
+        .any(|operation| matches!(operation, PaintOperation::Primitive(Primitive::Path(_) | Primitive::Surface(_))));
     if !painted_path {
         return None;
     }
@@ -100,7 +102,7 @@ pub(crate) fn split(
     let mut overlay = Vec::new();
     for ((_, _, ix), primitive) in sequence {
         let reach = reach(primitive);
-        if matches!(primitive, Primitive::Path(_))
+        if matches!(primitive, Primitive::Path(_) | Primitive::Surface(_))
             || union.is_some_and(|union| union.intersects(&reach))
                 && reaches.iter().any(|earlier| earlier.intersects(&reach))
         {

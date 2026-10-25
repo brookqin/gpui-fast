@@ -40,3 +40,6 @@ pub(crate) mod text_style;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(target_family = "wasm")]
+pub(crate) mod dynamic_surface;

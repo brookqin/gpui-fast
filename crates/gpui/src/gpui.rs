@@ -426,3 +426,6 @@ pub struct GpuSpecs {
     /// Further information about the driver, as reported by Vulkan.
     pub driver_info: String,
 }
+
+#[cfg(target_family = "wasm")]
+pub use fast::dynamic_surface::DynamicSurfaceId;

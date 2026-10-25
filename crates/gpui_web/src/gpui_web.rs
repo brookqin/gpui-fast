@@ -55,3 +55,6 @@ pub use logging::init_logging;
 pub use platform::{WebPlatform, WebWindowError};
 #[cfg(target_family = "wasm")]
 pub use window::WebWindow;
+
+#[cfg(all(target_family = "wasm", feature = "webgpu"))]
+pub use fast::browser_surface::{BrowserSurface, BrowserSurfaceMode, BrowserSurfaceStats};

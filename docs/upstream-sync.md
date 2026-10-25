@@ -231,3 +231,12 @@ commit our copy was taken from is `zed_commit` in `UPSTREAM`, and
    `A11yDebug::last_tree_update` in every build: `fast/a11y.rs` reads the
    nodes it draws again from there
    (`a11y_frame_keeps_the_tree_it_sent` fails if it stops).
+
+### Dynamic browser surfaces
+
+The additive browser API exports `DynamicSurfaceId`,
+`Window::paint_dynamic_surface` and `Window::dynamic_surface_frame_requester`.
+`PaintSurface` carries a browser-only identity; browser producer objects stay
+in a UI-thread registry. This API extension is required to let producers update
+pixels in the existing ordered scene without rebuilding a document view.
+Apple pixel-buffer surfaces and native composition retain their existing APIs.

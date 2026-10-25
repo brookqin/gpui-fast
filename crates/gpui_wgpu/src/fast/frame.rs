@@ -60,6 +60,8 @@ const MAX_GROUP_PATH_BATCHES: usize = 64;
 /// The renderer's state that outlives a frame.
 #[derive(Default)]
 pub(crate) struct FrameState {
+    #[cfg(all(target_family = "wasm", feature = "webgpu"))]
+    pub(crate) surfaces: crate::fast::dynamic_surface::SurfaceCache,
     pub(crate) bind_groups: BindGroupCache,
     pub(crate) globals: UploadedGlobals,
     pub(crate) layers: TileCache,
@@ -278,6 +280,8 @@ fn record_with(
     clear: wgpu::Color,
 ) -> Result<wgpu::SubmissionIndex> {
     state.bind_groups.begin_frame();
+    #[cfg(all(target_family = "wasm", feature = "webgpu"))]
+    state.surfaces.begin_frame();
 
     // The layer tiles to rasterize before the frame draws them.
     let planned = state
@@ -957,9 +961,13 @@ pub(crate) fn draw_scene(
                     range,
                 );
             }
-            // Surfaces are macOS-only for video playback and are not
-            // implemented by the WGPU renderer.
-            PrimitiveBatch::Surfaces(_surfaces) => {}
+            PrimitiveBatch::Surfaces(_surfaces) => {
+                #[cfg(all(target_family = "wasm", feature = "webgpu"))]
+                for surface in &scene.surfaces[_surfaces] {
+                    state.surfaces.draw(target, &mut pass, draw.globals, surface);
+                    bound.forget();
+                }
+            }
         }
     }
     drop(pass);

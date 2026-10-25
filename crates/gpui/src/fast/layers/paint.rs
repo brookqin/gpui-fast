@@ -754,7 +754,7 @@ fn repaint(
     let has_paths = content
         .paint_operations
         .iter()
-        .any(|operation| matches!(operation, PaintOperation::Primitive(Primitive::Path(_))));
+        .any(|operation| matches!(operation, PaintOperation::Primitive(Primitive::Path(_) | Primitive::Surface(_))));
     let mut visible = painting.viewport.scale(scale_factor);
     visible.origin += to_content;
     let mut rendered_work = 0;
