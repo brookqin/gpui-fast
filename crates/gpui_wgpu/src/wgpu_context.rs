@@ -346,11 +346,7 @@ impl WgpuContext {
         canvas: &web_sys::HtmlCanvasElement,
         preference: WebBackendPreference,
     ) -> anyhow::Result<PreparedWebGraphics> {
-        let backends = match preference {
-            WebBackendPreference::Auto => wgpu::Backends::BROWSER_WEBGPU | wgpu::Backends::GL,
-            WebBackendPreference::WebGpu => wgpu::Backends::BROWSER_WEBGPU,
-            WebBackendPreference::WebGl => wgpu::Backends::GL,
-        };
+        let backends = crate::fast::web_backends::select(preference)?;
         let descriptor = wgpu::InstanceDescriptor {
             backends,
             flags: wgpu::InstanceFlags::default(),
@@ -727,7 +723,7 @@ impl WgpuContext {
     }
 
     pub fn uses_webgl_instance_data(&self) -> bool {
-        matches!(self.backend, WgpuBackend::Gl) && cfg!(target_family = "wasm")
+        crate::fast::shader_variants::uses_texture_instances(self.backend)
     }
 
     pub fn supports_dual_source_blending(&self) -> bool {

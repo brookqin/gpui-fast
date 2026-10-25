@@ -13,7 +13,9 @@ path = "src/gpui_wgpu.rs"
 doctest = false
 
 [features]
-default = []
+default = ["webgpu", "webgl"]
+webgpu = ["wgpu/webgpu", "wgpu/wgsl"]
+webgl = ["wgpu/webgl", "wgpu/wgsl"]
 bench-support = ["gpui/bench-support", "dep:image"]
 font-kit = ["dep:font-kit"]
 test-support = ["gpui/test-support", "dep:image"]
@@ -44,12 +46,12 @@ font-kit = { workspace = true, optional = true }
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
 wgpu = { workspace = true, features = ["std", "metal", "gles", "vulkan", "wgsl", "webgpu"] }
 
-[target.'cfg(not(any(target_os = "linux", target_os = "freebsd")))'.dependencies]
+[target.'cfg(not(any(target_family = "wasm", target_os = "linux", target_os = "freebsd")))'.dependencies]
 wgpu = { workspace = true, default-features = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 web-sys = { workspace = true, features = ["HtmlCanvasElement"] }
-wgpu = { workspace = true, features = ["webgl"] }
+wgpu = { workspace = true, features = ["std"] }
 
 [dev-dependencies]
 criterion.workspace = true

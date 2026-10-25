@@ -16,7 +16,7 @@ use gpui::{
     PlatformTextSystem, PlatformWindow, ScrollPhysics, Task, ThermalState, WindowAppearance,
     WindowKind, WindowParams, popup::PopupNotSupportedError,
 };
-use gpui_wgpu::{PreparedWebGraphics, WebBackendPreference, WgpuContext, wgpu};
+use gpui_wgpu::{WebBackendPreference, WgpuContext, wgpu};
 use std::{
     cell::{Cell, RefCell},
     path::{Path, PathBuf},
@@ -234,73 +234,7 @@ async fn initialize_graphics(
     WgpuContext,
     wgpu::Surface<'static>,
 )> {
-    match preference {
-        WebBackendPreference::Auto => {
-            let webgpu_canvas = WebWindow::prepare_canvas(browser_window)?;
-            let webgpu_result = if wgpu::util::is_browser_webgpu_supported().await {
-                WgpuContext::new_web(&webgpu_canvas, WebBackendPreference::WebGpu).await
-            } else {
-                Err(anyhow::anyhow!(
-                    "browser WebGPU probe did not return a usable adapter"
-                ))
-            };
-            match webgpu_result {
-                Ok(PreparedWebGraphics { context, surface }) => {
-                    return Ok((webgpu_canvas, context, surface));
-                }
-                Err(webgpu_error) => {
-                    let canvas: &web_sys::Element = webgpu_canvas.as_ref();
-                    canvas.remove();
-                    log::warn!(
-                        "WebGPU initialization failed; falling back to WebGL2: {webgpu_error:#}"
-                    );
-
-                    let webgl_canvas =
-                        WebWindow::prepare_canvas(browser_window).map_err(|error| {
-                            anyhow::anyhow!(
-                                "WebGPU initialization failed: {webgpu_error:#}. \
-                             Failed to prepare a replacement canvas for WebGL2: {error:#}"
-                            )
-                        })?;
-                    match WgpuContext::new_web(&webgl_canvas, WebBackendPreference::WebGl).await {
-                        Ok(PreparedWebGraphics { context, surface }) => {
-                            Ok((webgl_canvas, context, surface))
-                        }
-                        Err(webgl_error) => {
-                            let canvas: &web_sys::Element = webgl_canvas.as_ref();
-                            canvas.remove();
-                            Err(anyhow::anyhow!(
-                                "No browser graphics backend could be initialized. \
-                                 Tried WebGPU, then WebGL2. \
-                                 WebGPU failure: {webgpu_error:#}. \
-                                 WebGL2 failure: {webgl_error:#}"
-                            ))
-                        }
-                    }
-                }
-            }
-        }
-        WebBackendPreference::WebGpu | WebBackendPreference::WebGl => {
-            let backend_name = if preference == WebBackendPreference::WebGpu {
-                "WebGPU"
-            } else {
-                "WebGL2"
-            };
-            let canvas = WebWindow::prepare_canvas(browser_window)?;
-            match WgpuContext::new_web(&canvas, preference).await {
-                Ok(PreparedWebGraphics { context, surface }) => Ok((canvas, context, surface)),
-                Err(error) => {
-                    let canvas: &web_sys::Element = canvas.as_ref();
-                    canvas.remove();
-                    Err(anyhow::anyhow!(
-                        "No browser graphics backend could be initialized. \
-                         Only {backend_name} was tried because the application requested \
-                         it explicitly. {backend_name} failure: {error:#}"
-                    ))
-                }
-            }
-        }
-    }
+    crate::fast::web_backends::initialize(browser_window, preference).await
 }
 
 impl Platform for WebPlatform {

@@ -15,3 +15,8 @@ pub(crate) mod globals;
 pub(crate) mod layers;
 pub(crate) mod pass_state;
 pub(crate) mod rounded_clip;
+
+#[cfg(target_family = "wasm")]
+pub(crate) mod web_backends;
+
+pub(crate) mod shader_variants;

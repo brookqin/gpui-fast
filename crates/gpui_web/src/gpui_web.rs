@@ -3,6 +3,9 @@
 //! force either backend with `WebBackendPreference`. Opening a second top-level window, or
 //! reopening one after it closes, returns `WebWindowError`.
 
+#[cfg(target_family = "wasm")]
+mod fast;
+
 pub mod canvas_fallback;
 
 pub use canvas_fallback::CanvasFontFallback;

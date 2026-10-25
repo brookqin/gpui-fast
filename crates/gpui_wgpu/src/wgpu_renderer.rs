@@ -22,17 +22,14 @@ const INSTANCE_TEXTURE_TEXEL_SIZE: u64 = 16;
 
 /// Shader variant for backends with storage buffer support: the shared shader
 /// logic plus the storage-buffer instance transport.
-const STORAGE_BUFFER_SHADERS: &str = concat!(
-    include_str!("shaders.wgsl"),
-    include_str!("shaders_storage.wgsl"),
-);
+#[cfg(test)]
+const STORAGE_BUFFER_SHADERS: &str = crate::fast::shader_variants::STORAGE_BUFFER_SHADERS;
 
 /// Shader variant for WebGL2, which has no storage buffers: the shared shader
 /// logic plus the texture-based instance transport.
-const WEBGL_SHADERS: &str = concat!(
-    include_str!("shaders.wgsl"),
-    include_str!("shaders_webgl.wgsl"),
-);
+#[cfg(any(not(target_family = "wasm"), feature = "webgl"))]
+#[cfg(test)]
+const WEBGL_SHADERS: &str = crate::fast::shader_variants::WEBGL_SHADERS;
 
 /// Subpixel text rendering requires dual-source blending, which WebGL2 lacks, so
 /// this variant only ever runs with the storage-buffer transport. The `enable`
@@ -696,11 +693,7 @@ impl WgpuRendererCore {
         let dual_source_blending =
             dual_source_blending && device_has_feature && !uses_webgl_instance_data;
 
-        let shader_source = if uses_webgl_instance_data {
-            WEBGL_SHADERS
-        } else {
-            STORAGE_BUFFER_SHADERS
-        };
+        let shader_source = crate::fast::shader_variants::source(uses_webgl_instance_data);
         let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("gpui_shaders"),
             source: crate::fast::rounded_clip::shader_source(shader_source),
