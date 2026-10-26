@@ -1,4 +1,5 @@
 [workspace]
+exclude = ["packages"]
 resolver = "2"
 members = [
     "compat/gpui-pre",

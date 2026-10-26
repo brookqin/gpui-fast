@@ -1,2 +1,4 @@
 /target
+/packages/target/
+/packages/Cargo.lock
 /.claude/worktrees/

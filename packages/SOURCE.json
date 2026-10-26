@@ -1,0 +1,9 @@
+{
+  "sourceRevision": "d4e295562c64d51bcfa493c2e29e14c058a14f4a",
+  "version": "0.1.10",
+  "wgpu": {
+    "git": "https://github.com/brookqin/wgpu.git",
+    "rev": "35f8c66e67f15b5321fcfb3396d99653446c86b2"
+  },
+  "generator": "script/prepare-git.ts"
+}
