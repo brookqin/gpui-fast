@@ -1,6 +1,6 @@
 {
-  "sourceRevision": "1b64ae09332e2cd48241e93c7f80a212872c77b6",
-  "version": "0.1.10",
+  "sourceRevision": "3438c1d9fe5b1360c726e00e86f0c83a751350b8",
+  "version": "0.1.12",
   "wgpu": {
     "git": "https://github.com/brookqin/wgpu.git",
     "rev": "35f8c66e67f15b5321fcfb3396d99653446c86b2"
