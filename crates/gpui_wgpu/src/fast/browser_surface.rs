@@ -34,11 +34,19 @@ pub struct BrowserSurfaceStats {
 #[derive(Clone)]
 pub struct BrowserSurface(pub(crate) Rc<Source>);
 
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct Geometry {
+    pub corners: [[f32; 2]; 4],
+    pub clip: [[f32; 2]; 4],
+    pub aspect_ratio: f32,
+}
+
 pub(crate) struct Source {
     pub(crate) id: DynamicSurfaceId,
     pub(crate) video: web_sys::HtmlVideoElement,
     pub(crate) mode: BrowserSurfaceMode,
     pub(crate) serial: Cell<u64>,
+    pub(crate) geometry: Cell<Option<Geometry>>,
     pub(crate) stats: RefCell<BrowserSurfaceStats>,
     wake: Rc<dyn Fn()>,
     callback: RefCell<Option<Closure<dyn FnMut(f64)>>>,
@@ -70,6 +78,7 @@ impl BrowserSurface {
             video,
             mode,
             serial: Cell::new(1),
+            geometry: Cell::new(None),
             stats: RefCell::new(BrowserSurfaceStats::default()),
             wake,
             callback: RefCell::new(None),
@@ -125,6 +134,32 @@ impl BrowserSurface {
         }
         source.schedule();
         Self(source)
+    }
+
+    /// Configure an affine frame and convex four-sided clip, normalized to the
+    /// bounds passed to paint_dynamic_surface. Corner order is source TL/TR/BR/BL;
+    /// clip order may start at any vertex and run in either direction.
+    /// Aspect ratio is the untransformed presentation width divided by height.
+    /// Geometry affects presentation only; it never marks a decoded frame dirty.
+    pub fn set_geometry(&self, corners: [[f32; 2]; 4], clip: [[f32; 2]; 4], aspect_ratio: f32) {
+        if corners
+            .iter()
+            .chain(clip.iter())
+            .flatten()
+            .any(|v| !v.is_finite())
+            || !aspect_ratio.is_finite()
+            || aspect_ratio <= 0.
+        {
+            return;
+        }
+        let next = Some(Geometry {
+            corners,
+            clip,
+            aspect_ratio,
+        });
+        if self.0.geometry.replace(next) != next {
+            (self.0.wake)();
+        }
     }
 
     /// Identity to paint in the GPUI scene.
