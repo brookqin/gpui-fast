@@ -1,3 +1,4 @@
+// Modified by Longbridge for gpui-fast.
 //! Browser source frames sampled in the ordered GPUI render pass.
 use crate::fast::browser_surface::{BrowserSurfaceMode, Source, lookup};
 use crate::fast::frame::FrameTarget;

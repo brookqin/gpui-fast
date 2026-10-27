@@ -1,3 +1,4 @@
+// Modified by Longbridge for gpui-fast.
 //! UI-thread video ownership and frame demand, independent of GPU resources.
 use gpui::DynamicSurfaceId;
 use std::cell::{Cell, RefCell};

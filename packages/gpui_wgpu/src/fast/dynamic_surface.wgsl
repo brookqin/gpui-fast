@@ -1,3 +1,4 @@
+// Modified by Longbridge for gpui-fast.
 struct GlobalParams { viewport_size: vec2<f32>, premultiplied_alpha: u32, pad: u32 }
 struct SurfaceParams { bounds: vec4<f32>, mask: vec4<f32>, opacity: vec4<f32>, corners: array<vec4<f32>, 2>, clip: array<vec4<f32>, 2>, fit: vec4<f32> }
 @group(0) @binding(0) var<uniform> globals: GlobalParams;
