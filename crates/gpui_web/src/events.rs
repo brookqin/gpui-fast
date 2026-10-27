@@ -714,6 +714,14 @@ impl WebWindowInner {
                 }));
             }
 
+            if crate::fast::ime::owns_key_down(
+                this.is_composing.get(),
+                event.is_composing(),
+                event.key_code(),
+            ) {
+                return;
+            }
+
             let key = dom_key_to_gpui_key(&event);
 
             if is_modifier_only_key(&key) {
@@ -755,11 +763,6 @@ impl WebWindowInner {
                     this.schedule_ime_mirror_sync();
                     return;
                 }
-            }
-
-            if this.is_composing.get() || event.is_composing() {
-                event.prevent_default();
-                return;
             }
 
             if keystroke_inserts_text(&modifiers, this.is_mac)

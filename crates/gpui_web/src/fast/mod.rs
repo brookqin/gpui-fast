@@ -1,3 +1,4 @@
+pub(crate) mod ime;
 pub(crate) mod web_backends;
 
 #[cfg(feature = "webgpu")]
