@@ -1,4 +1,3 @@
-// Modified by Longbridge for gpui-fast.
 //! Browser source frames sampled in the ordered GPUI render pass.
 use crate::fast::browser_surface::{BrowserSurfaceMode, Source, lookup};
 use crate::fast::frame::FrameTarget;
@@ -58,7 +57,7 @@ impl Pipeline {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: wgpu::BufferSize::new(48),
+                        min_binding_size: wgpu::BufferSize::new(128),
                     },
                     count: None,
                 },
@@ -96,9 +95,9 @@ impl Pipeline {
             .replace(
                 "VIDEO_SAMPLE",
                 if external {
-                    "textureSampleBaseClampToEdge(video_texture, video_sampler, input.uv)"
+                    "textureSampleBaseClampToEdge(video_texture, video_sampler, uv)"
                 } else {
-                    "textureSample(video_texture, video_sampler, input.uv)"
+                    "textureSampleLevel(video_texture, video_sampler, uv, 0.0)"
                 },
             );
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -244,6 +243,7 @@ impl SurfaceCache {
             gpui::DynamicSurfaceFit::Contain => gpui::ObjectFit::Contain,
             gpui::DynamicSurfaceFit::Cover => gpui::ObjectFit::Cover,
         };
+        let geometry = source.geometry.get();
         let b = fit
             .get_bounds(
                 surface.bounds.map(|p| gpui::px(p.0)),
@@ -253,8 +253,13 @@ impl SurfaceCache {
                 ),
             )
             .map(|p| gpui::ScaledPixels(f32::from(p)));
+        let b = if geometry.is_some() {
+            surface.bounds
+        } else {
+            b
+        };
         let m = surface.content_mask.bounds.intersect(&surface.bounds);
-        let data = [
+        let mut data = vec![
             b.origin.x.0,
             b.origin.y.0,
             b.size.width.0,
@@ -268,6 +273,22 @@ impl SurfaceCache {
             0.,
             0.,
         ];
+        let unit = [[0., 0.], [1., 0.], [1., 1.], [0., 1.]];
+        let corners = geometry.map_or(unit, |g| g.corners);
+        let clip = geometry.map_or(unit, |g| g.clip);
+        data[9] = if geometry.is_some() { 1. } else { 0. };
+        for point in corners.into_iter().chain(clip) {
+            data.extend(point);
+        }
+        let frame_aspect =
+            source.video.video_width() as f32 / source.video.video_height().max(1) as f32;
+        let ratio = geometry.map_or(1., |g| g.aspect_ratio) / frame_aspect;
+        let fit = match surface.fast_dynamic_fit {
+            gpui::DynamicSurfaceFit::Fill => [1., 1.],
+            gpui::DynamicSurfaceFit::Contain => [(1. / ratio).min(1.), ratio.min(1.)],
+            gpui::DynamicSurfaceFit::Cover => [(1. / ratio).max(1.), ratio.max(1.)],
+        };
+        data.extend([fit[0], fit[1], 0., 0.]);
         let uniform = target
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {

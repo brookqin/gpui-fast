@@ -1,5 +1,3 @@
-// Modified by Longbridge for gpui-fast.
-// Modified for gpui-fast releases: adapted to wgpu =30.0.1.
 use crate::{CompositorGpuHint, DeviceErrorState, WgpuAtlas, WgpuContext};
 use anyhow::{Context as _, Result};
 use bytemuck::{Pod, Zeroable};
@@ -393,7 +391,7 @@ impl WgpuRenderer {
                 surface_caps
                     .formats
                     .iter()
-                    .find(|format| !format.is_srgb())
+                    .find(|format| !format.has_srgb_suffix())
                     .copied()
             })
             .or_else(|| surface_caps.formats.first().copied())
@@ -2780,6 +2778,27 @@ mod tests {
             SUBPIXEL_SHADERS,
             naga::valid::Capabilities::DUAL_SOURCE_BLENDING,
         );
+    }
+
+    #[test]
+    fn affine_dynamic_surface_shaders_validate() {
+        for (texture, sample, capabilities) in [
+            (
+                "texture_2d<f32>",
+                "textureSampleLevel(video_texture, video_sampler, uv, 0.0)",
+                naga::valid::Capabilities::empty(),
+            ),
+            (
+                "texture_external",
+                "textureSampleBaseClampToEdge(video_texture, video_sampler, uv)",
+                naga::valid::Capabilities::TEXTURE_EXTERNAL,
+            ),
+        ] {
+            let source = include_str!("fast/dynamic_surface.wgsl")
+                .replace("VIDEO_TEXTURE", texture)
+                .replace("VIDEO_SAMPLE", sample);
+            validate_wgsl(&crate::fast::rounded_clip::shader(&source), capabilities);
+        }
     }
 
     fn validate_wgsl(source: &str, capabilities: naga::valid::Capabilities) {
