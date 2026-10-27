@@ -1774,9 +1774,9 @@ mod invalidation {
     use crate::fast::layers::invalidate::{ScrollSource, render_read_offset, scrolled};
     use crate::{
         AnyWindowHandle, App, AppContext as _, Context, Entity, GlobalElementId,
-        InteractiveElement as _, IntoElement, ParentElement as _, Render, ScrollDelta,
-        ScrollHandle, ScrollWheelEvent, StatefulInteractiveElement as _, Styled as _,
-        TestAppContext, TouchPhase, Window, div, point, px, rgb,
+        InteractiveElement as _, IntoElement, ParentElement as _, Render, ScrollDelta, ScrollEvent,
+        ScrollHandle, StatefulInteractiveElement as _, Styled as _, TestAppContext, TouchPhase,
+        Window, div, point, px, rgb,
     };
     use std::{cell::Cell, rc::Rc};
 
@@ -1854,11 +1854,12 @@ mod invalidation {
     ) -> Vec<GlobalElementId> {
         with_window(cx, window, |window, cx| {
             window.dispatch_event(
-                crate::PlatformInput::ScrollWheel(ScrollWheelEvent {
+                crate::PlatformInput::Scroll(ScrollEvent {
                     position: point(px(20.), px(20.)),
                     delta: ScrollDelta::Pixels(point(px(0.), px(dy))),
                     modifiers: Default::default(),
                     touch_phase: TouchPhase::Moved,
+                    ..Default::default()
                 }),
                 cx,
             );
@@ -2075,7 +2076,7 @@ mod decisions {
     use crate::{
         AnyElement, AnyWindowHandle, App, AppContext as _, Bounds, Context, Entity,
         GlobalElementId, Hsla, InteractiveElement as _, IntoElement, MouseMoveEvent,
-        ParentElement as _, Pixels, Render, ScrollDelta, ScrollHandle, ScrollWheelEvent,
+        ParentElement as _, Pixels, Render, ScrollDelta, ScrollEvent, ScrollHandle,
         StatefulInteractiveElement as _, Styled as _, TestAppContext, TouchPhase, Window,
         WindowHandle, canvas, div, point, px, rgb, size,
     };
@@ -2270,11 +2271,12 @@ mod decisions {
             with_window(cx, window, |window, cx| {
                 change(cx);
                 window.dispatch_event(
-                    crate::PlatformInput::ScrollWheel(ScrollWheelEvent {
+                    crate::PlatformInput::Scroll(ScrollEvent {
                         position: point(px(20.), px(20.)),
                         delta: ScrollDelta::Pixels(point(px(0.), px(dy))),
                         modifiers: Default::default(),
                         touch_phase: TouchPhase::Moved,
+                        ..Default::default()
                     }),
                     cx,
                 );
@@ -2440,11 +2442,12 @@ mod decisions {
         frame_after(cx, window, |cx| {
             with_window(cx, window, |window, cx| {
                 window.dispatch_event(
-                    crate::PlatformInput::ScrollWheel(ScrollWheelEvent {
+                    crate::PlatformInput::Scroll(ScrollEvent {
                         position: point(px(20.), px(20.)),
                         delta: ScrollDelta::Pixels(point(px(0.), px(-20.))),
                         modifiers: Default::default(),
                         touch_phase: TouchPhase::Moved,
+                        ..Default::default()
                     }),
                     cx,
                 );
@@ -3198,7 +3201,7 @@ mod input {
         AnyWindowHandle, AppContext as _, Bounds, Context, DispatchPhase, FocusHandle,
         HitboxBehavior, InteractiveElement as _, IntoElement, Modifiers, MouseButton,
         MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point, Render,
-        ScrollDelta, ScrollHandle, ScrollWheelEvent, StatefulInteractiveElement as _, Styled as _,
+        ScrollDelta, ScrollEvent, ScrollHandle, StatefulInteractiveElement as _, Styled as _,
         TestAppContext, TouchPhase, Window, WindowHandle, canvas, div, point, px, rgb,
     };
     use std::{
@@ -3341,11 +3344,12 @@ mod input {
         frame_after(cx, window, |cx| {
             with_window(cx, window, |window, cx| {
                 window.dispatch_event(
-                    crate::PlatformInput::ScrollWheel(ScrollWheelEvent {
+                    crate::PlatformInput::Scroll(ScrollEvent {
                         position: point(px(150.), px(20.)),
                         delta: ScrollDelta::Pixels(point(px(0.), px(dy))),
                         modifiers: Default::default(),
                         touch_phase: TouchPhase::Moved,
+                        ..Default::default()
                     }),
                     cx,
                 );
@@ -4098,11 +4102,12 @@ mod integration {
             for window in [layered, plain] {
                 cx.update_window(window.into(), |_, window, cx| {
                     window.dispatch_event(
-                        crate::PlatformInput::ScrollWheel(crate::ScrollWheelEvent {
+                        crate::PlatformInput::Scroll(crate::ScrollEvent {
                             position: point(px(20.), px(20.)),
                             delta: crate::ScrollDelta::Pixels(point(px(0.), px(dy))),
                             modifiers: Default::default(),
                             touch_phase: crate::TouchPhase::Moved,
+                            ..Default::default()
                         }),
                         cx,
                     );
