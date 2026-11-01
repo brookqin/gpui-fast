@@ -429,3 +429,6 @@ pub struct GpuSpecs {
 
 #[cfg(target_family = "wasm")]
 pub use fast::dynamic_surface::{DynamicSurfaceFit, DynamicSurfaceId};
+
+#[cfg(not(target_family = "wasm"))]
+pub use fast::video::{VideoFrame, VideoGeometry, VideoSurface};

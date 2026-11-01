@@ -35,6 +35,7 @@ use crate::{DirectXAtlas, DirectXRenderer};
 /// The renderer's gpui-fast state, kept from frame to frame.
 #[derive(Default)]
 pub(crate) struct FrameState {
+    pub(crate) video: crate::fast::video::VideoRenderer,
     pub(crate) globals: UploadedGlobals,
     pub(crate) state: DrawState,
     path_vertices: Vec<PathRasterizationSprite>,
@@ -90,7 +91,7 @@ pub(crate) fn draw_batches(renderer: &mut DirectXRenderer, scene: &Scene) -> Res
         .annotation
         .as_ref()
         .is_some_and(|annotation| unsafe { annotation.GetStatus().as_bool() });
-    if capturing && scene.layers.frames.is_empty() {
+    if capturing && scene.layers.frames.is_empty() && scene.surfaces.is_empty() {
         return Ok(false);
     }
     let resources = renderer.resources.as_ref().context("resources missing")?;
@@ -172,6 +173,7 @@ pub(crate) fn draw_scene_masked(
         .context("batch params buffer missing")?;
     let device_context = target.device_context;
     frame.state.forget();
+    frame.video.begin_frame(scene);
     let mut restore_upload = false;
 
     for batch in scene.batches() {
@@ -295,8 +297,17 @@ pub(crate) fn draw_scene_masked(
                 let pipeline = &pipelines.poly_sprites;
                 draw.instances(pipeline, range.start, range.len(), Some(&view))
             }
-            // Upstream draws nothing for surfaces on Windows either.
-            PrimitiveBatch::Surfaces(_) => Ok(()),
+            PrimitiveBatch::Surfaces(range) => {
+                unsafe {
+                    device_context
+                        .PSSetSamplers(0, Some(std::slice::from_ref(&target.globals.sampler)));
+                }
+                for surface in &scene.surfaces[range] {
+                    frame.video.draw(target.device, device_context, surface)?;
+                }
+                draw.state.forget();
+                Ok(())
+            }
         }
         .with_context(|| scene_too_large(scene))?;
     }

@@ -235,3 +235,12 @@ The same browser API also exports `DynamicSurfaceFit` and
 `Window::paint_dynamic_surface_with_fit` so metadata and source-size changes need
 no scene rebuild. A one-line device-loss policy hook treats explicit browser
 GPUDevice destruction as terminal while preserving native teardown behavior.
+
+### Native video surfaces
+
+`VideoFrame`, `VideoGeometry`, `VideoSurface`, and `Window::paint_video_frame` are
+a deliberate public API extension for native decoded video in the scene. The
+application explicitly requested native decoding with GPUI-owned clipping and
+transforms. Existing `paint_surface` is unchanged for upstream camera callers.
+All implementation lives in fast/video; the scene field, legacy initialization,
+Metal dispatch and completion hooks are the only upstream changes.
