@@ -1,5 +1,6 @@
 // Modified by Longbridge for gpui-fast.
-cbuffer Globals: register(b0) { float2 viewport; };
+// GlobalParams starts with gamma_ratios; the viewport is at byte offset 16.
+cbuffer Globals: register(b0) { float4 gamma_ratios; float2 viewport; };
 cbuffer Video: register(b2) { float4 bounds, mask, opacity, corners[2], polygon[2], fit, source[2]; };
 Texture2D<float4> image: register(t0);
 SamplerState sampling: register(s0);
