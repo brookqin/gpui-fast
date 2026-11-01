@@ -135,7 +135,7 @@ pub struct MetalRenderer {
     #[allow(clippy::arc_with_non_send_sync)]
     pub(crate) instance_buffer_pool: Arc<Mutex<InstanceBufferPool>>,
     pub(crate) sprite_atlas: Arc<MetalAtlas>,
-    core_video_texture_cache: CFRetained<CVMetalTextureCache>,
+    pub(crate) core_video_texture_cache: CFRetained<CVMetalTextureCache>,
     pub(crate) path_intermediate_texture: Option<metal::Texture>,
     pub(crate) path_intermediate_msaa_texture: Option<metal::Texture>,
     path_sample_count: u32,
@@ -143,6 +143,7 @@ pub struct MetalRenderer {
     /// rendering headlessly without reading pixels back.
     #[cfg(any(test, feature = "bench-support", feature = "test-support"))]
     headless_render_target: Option<metal::Texture>,
+    pub(crate) fast_video: crate::fast::video::VideoRenderer,
     pub(crate) fast_layers: crate::fast::layers::TileCache,
 }
 
@@ -442,6 +443,7 @@ impl MetalRenderer {
             path_sample_count: PATH_SAMPLE_COUNT,
             #[cfg(any(test, feature = "bench-support", feature = "test-support"))]
             headless_render_target: None,
+            fast_video: crate::fast::video::VideoRenderer::default(),
             fast_layers: crate::fast::layers::TileCache::default(),
         }
     }
@@ -574,6 +576,7 @@ impl MetalRenderer {
         texture: &metal::TextureRef,
         viewport_size: Size<DevicePixels>,
     ) -> Result<metal::CommandBuffer> {
+        crate::fast::video::VideoRenderer::begin_frame(&mut self.fast_video, scene);
         crate::fast::layers::raster::rasterize_tiles(self, scene);
         let mut writer = InstanceBufferWriter::new(
             &self.device,
@@ -612,6 +615,7 @@ impl MetalRenderer {
             command_buffer.add_completed_handler(&*RcBlock::as_ptr(&block).cast());
         }
 
+        crate::fast::video::VideoRenderer::submitted(&mut self.fast_video, &command_buffer);
         Ok(command_buffer)
     }
 
@@ -1237,7 +1241,7 @@ impl MetalRenderer {
         );
     }
 
-    pub(crate) fn draw_surfaces(
+    pub(crate) fn fast_draw_legacy_surfaces(
         &mut self,
         surfaces: &[PaintSurface],
         first_surface: usize,
@@ -1814,6 +1818,7 @@ mod tests {
             bounds,
             content_mask: ContentMask { bounds },
             image_buffer: image_buffer.clone(),
+            fast_video: None,
         });
         drop(image_buffer);
         scene.finish();

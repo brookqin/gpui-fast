@@ -5236,6 +5236,7 @@ impl Window {
             bounds,
             content_mask,
             image_buffer,
+            fast_video: None,
         });
     }
 

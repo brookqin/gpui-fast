@@ -15,3 +15,8 @@ pub(crate) mod paths;
 pub(crate) mod rounded_clip;
 #[cfg(feature = "font-kit")]
 pub(crate) mod text_system;
+
+pub(crate) mod video;
+
+#[cfg(test)]
+mod video_tests;

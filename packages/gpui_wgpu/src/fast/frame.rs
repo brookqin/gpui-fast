@@ -61,6 +61,8 @@ const MAX_GROUP_PATH_BATCHES: usize = 64;
 /// The renderer's state that outlives a frame.
 #[derive(Default)]
 pub(crate) struct FrameState {
+    #[cfg(target_os = "linux")]
+    pub(crate) video: crate::fast::video::VideoRenderer,
     #[cfg(all(target_family = "wasm", feature = "webgpu"))]
     pub(crate) surfaces: crate::fast::dynamic_surface::SurfaceCache,
     pub(crate) bind_groups: BindGroupCache,
@@ -283,6 +285,8 @@ fn record_with(
     state.bind_groups.begin_frame();
     #[cfg(all(target_family = "wasm", feature = "webgpu"))]
     state.surfaces.begin_frame();
+    #[cfg(target_os = "linux")]
+    state.video.begin_frame(scene);
 
     // The layer tiles to rasterize before the frame draws them.
     let planned = state
@@ -963,9 +967,16 @@ pub(crate) fn draw_scene(
                 );
             }
             PrimitiveBatch::Surfaces(_surfaces) => {
+                #[cfg(target_os = "linux")]
+                for surface in &scene.surfaces[_surfaces.clone()] {
+                    state.video.draw(target, &mut pass, draw.globals, surface);
+                    bound.forget();
+                }
                 #[cfg(all(target_family = "wasm", feature = "webgpu"))]
                 for surface in &scene.surfaces[_surfaces] {
-                    state.surfaces.draw(target, &mut pass, draw.globals, surface);
+                    state
+                        .surfaces
+                        .draw(target, &mut pass, draw.globals, surface);
                     bound.forget();
                 }
             }

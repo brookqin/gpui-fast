@@ -23,10 +23,16 @@ pub(crate) mod web_backends;
 pub(crate) mod shader_variants;
 
 #[cfg(all(target_family = "wasm", feature = "webgpu"))]
-pub(crate) mod dynamic_surface;
+pub(crate) mod browser_surface;
 #[cfg(all(target_family = "wasm", feature = "webgpu"))]
 pub(crate) mod device_watch;
 #[cfg(all(target_family = "wasm", feature = "webgpu"))]
-pub(crate) mod browser_surface;
+pub(crate) mod dynamic_surface;
 
 pub(crate) mod device_errors;
+
+#[cfg(target_os = "linux")]
+pub(crate) mod video;
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod video_shader_tests;

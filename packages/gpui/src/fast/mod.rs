@@ -50,3 +50,6 @@ pub(crate) mod image_codecs;
 pub(crate) mod svg_capabilities;
 #[cfg(feature = "svg-text")]
 pub(crate) mod svg_fonts;
+
+#[cfg(not(target_family = "wasm"))]
+pub(crate) mod video;

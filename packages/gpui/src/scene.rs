@@ -767,6 +767,8 @@ impl From<PolychromeSprite> for Primitive {
 #[derive(Clone, Debug)]
 #[allow(missing_docs)]
 pub struct PaintSurface {
+    #[cfg(not(target_family = "wasm"))]
+    pub fast_video: Option<crate::fast::video::VideoSurface>,
     #[cfg(target_family = "wasm")]
     pub fast_dynamic_source: crate::fast::dynamic_surface::DynamicSurfaceId,
     #[cfg(target_family = "wasm")]

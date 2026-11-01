@@ -269,6 +269,7 @@ impl DirectXRenderer {
     }
 
     fn handle_device_lost_impl(&mut self, directx_devices: &DirectXDevices) -> Result<()> {
+        crate::fast::video::release(self);
         crate::fast::layers::release_tiles(self);
         crate::fast::composition::release(self);
         let disable_direct_composition = self.direct_composition.is_none();
