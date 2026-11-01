@@ -189,3 +189,42 @@ impl VideoRenderer {
 pub(crate) fn release(renderer: &mut crate::directx_renderer::DirectXRenderer) {
     renderer.fast_frame.video = VideoRenderer::default();
 }
+
+#[cfg(test)]
+mod tests {
+    use windows::Win32::Graphics::Direct3D::Fxc::D3DReflect;
+    use windows::Win32::Graphics::Direct3D11::{
+        D3D11_SHADER_VARIABLE_DESC, ID3D11ShaderReflection,
+    };
+    use windows::core::{Interface, PCSTR};
+
+    #[test]
+    fn compiled_video_viewport_matches_renderer_globals() {
+        let shader = super::compile(c"vs_video", c"vs_5_0").unwrap();
+        // Reflect the actual compiled shader, not a duplicate of its declaration.
+        unsafe {
+            let mut reflected = std::ptr::null_mut();
+            D3DReflect(
+                shader.GetBufferPointer(),
+                shader.GetBufferSize(),
+                &ID3D11ShaderReflection::IID,
+                &mut reflected,
+            )
+            .unwrap();
+            let reflected = ID3D11ShaderReflection::from_raw(reflected);
+            let globals = reflected
+                .GetConstantBufferByName(PCSTR(c"Globals".as_ptr().cast()))
+                .unwrap();
+            let viewport = globals
+                .GetVariableByName(PCSTR(c"viewport".as_ptr().cast()))
+                .unwrap();
+            let mut desc = D3D11_SHADER_VARIABLE_DESC::default();
+            viewport.GetDesc(&mut desc).unwrap();
+            assert_eq!(
+                desc.StartOffset as usize,
+                std::mem::offset_of!(crate::directx_renderer::GlobalParams, viewport_size)
+            );
+            assert_eq!(desc.Size, 8);
+        }
+    }
+}
