@@ -712,6 +712,7 @@ pub(crate) struct MacWindowState {
 
 impl MacWindowState {
     fn move_traffic_light(&mut self) {
+        let _fast_layout = crate::fast::window_chrome::ImmediateLayout::new();
         if let Some(traffic_light_position) = self.traffic_light_position {
             if self.is_fullscreen() && !self.is_exiting_fullscreen {
                 self.restore_traffic_light();
@@ -808,6 +809,7 @@ impl MacWindowState {
     }
 
     fn restore_traffic_light(&mut self) {
+        let _fast_layout = crate::fast::window_chrome::ImmediateLayout::new();
         if let Some(frames) = self.traffic_light_frames.take() {
             let Some(buttons) = self.traffic_light_buttons() else {
                 return;

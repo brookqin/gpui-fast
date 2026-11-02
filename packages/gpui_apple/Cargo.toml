@@ -135,7 +135,7 @@ features = ["NSArray", "NSAttributedString", "NSBundle", "NSCoder", "NSData", "N
 [target."cfg(any(target_os = \"macos\", target_os = \"ios\"))".dependencies.objc2-quartz-core]
 version = "=0.3.2"
 default-features = false
-features = ["std", "CALayer", "CAMetalDisplayLink", "CAMetalLayer", "objc2-metal", "objc2-core-foundation", "objc2-core-graphics"]
+features = ["std", "CALayer", "CATransaction", "CAMetalDisplayLink", "CAMetalLayer", "objc2-metal", "objc2-core-foundation", "objc2-core-graphics"]
 
 [target."cfg(any(target_os = \"macos\", target_os = \"ios\"))".dependencies.objc2-security]
 version = "0.3.2"
