@@ -30,9 +30,21 @@ impl Drop for ImmediateLayout {
 
 #[cfg(test)]
 mod tests {
-    use super::ImmediateLayout;
+    use super::{ImmediateLayout, fullscreen_options};
     use objc2_app_kit::NSAnimationContext;
     use objc2_quartz_core::CATransaction;
+
+    #[test]
+    fn native_titlebar_does_not_cover_fullscreen_content() {
+        use objc2_app_kit::NSApplicationPresentationOptions as Options;
+        let proposed = Options::FullScreen | Options::AutoHideDock | Options::AutoHideMenuBar;
+        assert_eq!(
+            fullscreen_options(proposed, true),
+            proposed | Options::AutoHideToolbar
+        );
+        assert_eq!(fullscreen_options(proposed, false), proposed);
+        assert_eq!(fullscreen_options(Options::Default, true), Options::Default);
+    }
 
     #[test]
     fn titlebar_layout_preserves_the_surrounding_animation() {
@@ -93,4 +105,50 @@ pub(crate) fn install_native_titlebar(
     let window = unsafe { &*native_window.cast::<NSWindow>() };
     window.setToolbarStyle(NSWindowToolbarStyle::Unified);
     window.setToolbar(Some(&toolbar));
+}
+
+/// AppKit otherwise leaves the empty native toolbar above the GPUI surface in
+/// fullscreen. Only our geometry-only toolbar should follow the system menu
+/// bar's reveal behavior; the application's GPUI toolbar stays in its content.
+pub(crate) fn register_fullscreen_presentation(decl: &mut objc2::runtime::ClassBuilder) {
+    use objc2::{runtime::AnyObject, runtime::Sel, sel};
+    use objc2_app_kit::{NSApplicationPresentationOptions, NSWindow};
+    unsafe {
+        decl.add_method(
+            sel!(window:willUseFullScreenPresentationOptions:),
+            fullscreen_presentation
+                as extern "C" fn(
+                    *mut AnyObject,
+                    Sel,
+                    *mut NSWindow,
+                    NSApplicationPresentationOptions,
+                ) -> NSApplicationPresentationOptions,
+        );
+    }
+}
+
+extern "C" fn fullscreen_presentation(
+    _: *mut objc2::runtime::AnyObject,
+    _: objc2::runtime::Sel,
+    window: *mut objc2_app_kit::NSWindow,
+    options: objc2_app_kit::NSApplicationPresentationOptions,
+) -> objc2_app_kit::NSApplicationPresentationOptions {
+    // SAFETY: AppKit supplies the live window for this delegate callback.
+    let window = unsafe { &*window };
+    let native_titlebar = window.toolbar().is_some_and(|toolbar| {
+        &*toolbar.identifier() == objc2_foundation::ns_string!("gpui-native-unified-titlebar")
+    });
+    fullscreen_options(options, native_titlebar)
+}
+
+fn fullscreen_options(
+    options: objc2_app_kit::NSApplicationPresentationOptions,
+    native_titlebar: bool,
+) -> objc2_app_kit::NSApplicationPresentationOptions {
+    use objc2_app_kit::NSApplicationPresentationOptions as Options;
+    if native_titlebar && options.contains(Options::FullScreen) {
+        options | Options::AutoHideToolbar
+    } else {
+        options
+    }
 }
