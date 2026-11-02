@@ -1,3 +1,4 @@
+// Modified by Longbridge for gpui-fast.
 //! Native video composed with document primitives; no per-pixel CPU transform.
 use anyhow::{Context, Result};
 use gpui::{PaintSurface, Scene};
