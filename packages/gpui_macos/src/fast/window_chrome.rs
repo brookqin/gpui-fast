@@ -55,3 +55,43 @@ mod tests {
         NSAnimationContext::endGrouping();
     }
 }
+
+/// Prefer AppKit's own unified toolbar when the requested geometry matches it.
+/// Resizing a standard titlebar from 32 to 52 points after AppKit restores it
+/// causes a visible second movement on fullscreen exit, even without implicit
+/// animation. A real (empty) native toolbar makes AppKit own that geometry for
+/// the whole transition. GPUI still draws and handles the toolbar content.
+/// Other requested positions retain the existing custom-position path.
+pub(crate) fn install_native_titlebar(
+    native_window: *mut objc2::runtime::AnyObject,
+    state: &Rc<parking_lot::Mutex<crate::window::MacWindowState>>,
+) {
+    use gpui::{point, px};
+    use objc2::MainThreadOnly;
+    use objc2_app_kit::{NSToolbar, NSToolbarDisplayMode, NSWindow, NSWindowToolbarStyle};
+    use objc2_foundation::ns_string;
+
+    {
+        let mut state = state.lock();
+        if !state.app_owns_titlebar_drag
+            || state.traffic_light_position != Some(point(px(19.), px(19.)))
+        {
+            return;
+        }
+        // Stop manual repositioning before AppKit sends any layout callbacks.
+        state.traffic_light_position = None;
+    }
+    let mtm = crate::main_thread_marker().expect("macOS windows require the main thread");
+    let toolbar = NSToolbar::initWithIdentifier(
+        NSToolbar::alloc(mtm),
+        ns_string!("gpui-native-unified-titlebar"),
+    );
+    toolbar.setDisplayMode(NSToolbarDisplayMode::IconOnly);
+    toolbar.setAllowsUserCustomization(false);
+    toolbar.setAutosavesConfiguration(false);
+    // SAFETY: Called by MacWindow::open with its newly created NSWindow/NSPanel,
+    // on the main thread, without holding the window state lock.
+    let window = unsafe { &*native_window.cast::<NSWindow>() };
+    window.setToolbarStyle(NSWindowToolbarStyle::Unified);
+    window.setToolbar(Some(&toolbar));
+}
