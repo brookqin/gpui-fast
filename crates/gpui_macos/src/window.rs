@@ -679,7 +679,7 @@ pub(crate) struct MacWindowState {
     last_key_equivalent: Option<KeyDownEvent>,
     last_left_mouse_down_event: Option<Retained<AnyObject>>,
     synthetic_drag_counter: usize,
-    traffic_light_position: Option<Point<Pixels>>,
+    pub(crate) traffic_light_position: Option<Point<Pixels>>,
     traffic_light_frames: Option<TrafficLightFrames>,
     pre_fullscreen_traffic_light_frames: Option<TrafficLightFrames>,
     transparent_titlebar: bool,
@@ -693,7 +693,7 @@ pub(crate) struct MacWindowState {
     // `_opaqueRectForWindowMoveWhenInTitlebar`, so AppKit does not drag the window from
     // the titlebar or delay titlebar clicks (a delay first observed on macOS 27). Such
     // windows draw their own titlebar and move the window via `start_window_move`.
-    app_owns_titlebar_drag: bool,
+    pub(crate) app_owns_titlebar_drag: bool,
     fullscreen_restore_bounds: Bounds<Pixels>,
     is_exiting_fullscreen: bool,
     simple_fullscreen_state: Option<SimpleFullscreenState>,
@@ -1320,6 +1320,7 @@ impl MacWindow {
                 }
             }
 
+            crate::fast::window_chrome::install_native_titlebar(native_window, &window.0);
             if focus && show {
                 let _: () =
                     msg_send![native_window, makeKeyAndOrderFront: ptr::null_mut::<AnyObject>()];
