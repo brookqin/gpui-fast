@@ -116,6 +116,14 @@ pub(crate) fn register_fullscreen_presentation(decl: &mut objc2::runtime::ClassB
     use objc2_app_kit::{NSApplicationPresentationOptions, NSWindow};
     unsafe {
         decl.add_method(
+            sel!(windowDidEnterFullScreen:),
+            did_enter as extern "C" fn(*mut AnyObject, Sel, *mut AnyObject),
+        );
+        decl.add_method(
+            sel!(windowDidFailToEnterFullScreen:),
+            failed_to_enter as extern "C" fn(*mut AnyObject, Sel, *mut AnyObject),
+        );
+        decl.add_method(
             sel!(window:willUseFullScreenPresentationOptions:),
             fullscreen_presentation
                 as extern "C" fn(
@@ -136,9 +144,7 @@ extern "C" fn fullscreen_presentation(
 ) -> objc2_app_kit::NSApplicationPresentationOptions {
     // SAFETY: AppKit supplies the live window for this delegate callback.
     let window = unsafe { &*window };
-    let native_titlebar = window.toolbar().is_some_and(|toolbar| {
-        &*toolbar.identifier() == objc2_foundation::ns_string!("gpui-native-unified-titlebar")
-    });
+    let native_titlebar = owns_titlebar(window);
     fullscreen_options(options, native_titlebar)
 }
 
@@ -152,4 +158,78 @@ fn fullscreen_options(
     } else {
         options
     }
+}
+
+/// Views are retained because AppKit can reparent or replace the titlebar while
+/// crossing Spaces. Restore every view we hid, including the old container.
+#[derive(Default)]
+pub(crate) struct NativeTitlebar {
+    hidden: Vec<(objc2::rc::Retained<objc2_app_kit::NSView>, bool)>,
+}
+
+fn owns_titlebar(window: &objc2_app_kit::NSWindow) -> bool {
+    window.toolbar().is_some_and(|toolbar| {
+        &*toolbar.identifier() == objc2_foundation::ns_string!("gpui-native-unified-titlebar")
+    })
+}
+
+pub(crate) fn hide_native_titlebar(state: &mut crate::window::MacWindowState) {
+    // SAFETY: Lifecycle hooks run on the main thread with this live window.
+    let window = unsafe { &*state.native_window.cast::<objc2_app_kit::NSWindow>() };
+    if !owns_titlebar(window) {
+        return;
+    }
+    let _layout = ImmediateLayout::new();
+    // Upstream makes titlebars opaque during fullscreen on macOS 15.3+.
+    // Our empty toolbar must never paint a second background over GPUI.
+    window.setTitlebarAppearsTransparent(true);
+    let Some(button) = window.standardWindowButton(objc2_app_kit::NSWindowButton::CloseButton)
+    else {
+        return;
+    };
+    // Same standard-button ancestry used by GPUI's existing geometry handling;
+    // no private class names or selectors. Hiding preserves the 52 px layout.
+    let container = unsafe { button.superview().and_then(|view| view.superview()) };
+    if let Some(container) = container {
+        if !state
+            .fast_chrome
+            .hidden
+            .iter()
+            .any(|(view, _)| *view == container)
+        {
+            let was_hidden = container.isHidden();
+            state
+                .fast_chrome
+                .hidden
+                .push((container.clone(), was_hidden));
+        }
+        container.setHidden(true);
+    }
+}
+
+pub(crate) fn restore_native_titlebar(state: &mut crate::window::MacWindowState) {
+    let _layout = ImmediateLayout::new();
+    for (view, was_hidden) in state.fast_chrome.hidden.drain(..) {
+        view.setHidden(was_hidden);
+    }
+}
+
+extern "C" fn did_enter(
+    this: *mut objc2::runtime::AnyObject,
+    _: objc2::runtime::Sel,
+    _: *mut objc2::runtime::AnyObject,
+) {
+    // SAFETY: This is the registered NSWindow delegate callback.
+    let state = unsafe { crate::window::get_window_state(&*this) };
+    hide_native_titlebar(&mut state.lock());
+}
+
+extern "C" fn failed_to_enter(
+    this: *mut objc2::runtime::AnyObject,
+    _: objc2::runtime::Sel,
+    _: *mut objc2::runtime::AnyObject,
+) {
+    // SAFETY: This is the registered NSWindow delegate callback.
+    let state = unsafe { crate::window::get_window_state(&*this) };
+    restore_native_titlebar(&mut state.lock());
 }
