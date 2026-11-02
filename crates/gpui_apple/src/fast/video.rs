@@ -1,15 +1,21 @@
 //! CoreVideo -> Metal sampling without CPU extraction or independent native views.
 use crate::metal_renderer::InstanceBindings;
 use crate::metal_renderer::MetalRenderer;
-use foreign_types::ForeignTypeRef;
+use anyhow::{Context as _, Result};
 use gpui::{DevicePixels, PaintSurface, Size, VideoFrame};
+use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_core_foundation::CFRetained;
 use objc2_core_video::{CVMetalTexture, CVMetalTextureCache, CVMetalTextureGetTexture};
+use objc2_foundation::NSString;
+use objc2_metal::{
+    MTLBlendFactor, MTLCommandBuffer, MTLCompileOptions, MTLDevice, MTLLibrary, MTLPixelFormat,
+    MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPipelineDescriptor, MTLRenderPipelineState,
+};
 use std::{cell::RefCell, ptr, sync::Arc};
 
 #[derive(Default)]
 pub(crate) struct VideoRenderer {
-    pipeline: Option<metal::RenderPipelineState>,
+    pipeline: Option<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
     // The last frame is reused when only scrolling/geometry changed.
     imported: Option<(u64, CFRetained<CVMetalTexture>)>,
     // Released by completion handler, never by an arbitrary frame-count delay.
@@ -22,18 +28,20 @@ impl VideoRenderer {
             self.imported = None;
         }
     }
-    pub(crate) fn submitted(&mut self, command: &metal::CommandBufferRef) {
+    pub(crate) fn submitted(&mut self, command: &ProtocolObject<dyn MTLCommandBuffer>) {
         if self.submitted.is_empty() {
             return;
         }
         let frames = RefCell::new(std::mem::take(&mut self.submitted));
-        let block = block2::RcBlock::new(move |_: ptr::NonNull<objc2::runtime::AnyObject>| {
-            frames.borrow_mut().clear();
-        });
+        let block = block2::RcBlock::new(
+            move |_: ptr::NonNull<ProtocolObject<dyn MTLCommandBuffer>>| {
+                frames.borrow_mut().clear();
+            },
+        );
         // SAFETY: Metal copies the completion block. The retained frame and CV texture
         // remain alive until the command completes, including player/window teardown.
         unsafe {
-            command.add_completed_handler(&*block2::RcBlock::as_ptr(&block).cast());
+            command.addCompletedHandler(block2::RcBlock::as_ptr(&block));
         }
     }
 }
@@ -44,8 +52,9 @@ pub(crate) fn draw(
     first: usize,
     bindings: &InstanceBindings,
     viewport: Size<DevicePixels>,
-    encoder: &metal::RenderCommandEncoderRef,
-) {
+    encoder: &ProtocolObject<dyn MTLRenderCommandEncoder>,
+    surface_textures: &mut Vec<CFRetained<CVMetalTexture>>,
+) -> Result<()> {
     for (index, surface) in surfaces.iter().enumerate() {
         let Some(video) = &surface.fast_video else {
             renderer.fast_draw_legacy_surfaces(
@@ -54,30 +63,37 @@ pub(crate) fn draw(
                 bindings,
                 viewport,
                 encoder,
-            );
+                surface_textures,
+            )?;
             continue;
         };
         let state = &mut renderer.fast_video;
         if state.pipeline.is_none() {
-            let pipeline = (|| {
-                let library = renderer.device.new_library_with_source(
-                    include_str!("video.metal"),
-                    &metal::CompileOptions::new(),
+            let pipeline = (|| -> Result<_> {
+                let library = renderer.device.newLibraryWithSource_options_error(
+                    &NSString::from_str(include_str!("video.metal")),
+                    Some(&MTLCompileOptions::new()),
                 )?;
-                let descriptor = metal::RenderPipelineDescriptor::new();
-                let vertex = library.get_function("video_vertex", None)?;
-                let fragment = library.get_function("video_fragment", None)?;
-                descriptor.set_vertex_function(Some(&vertex));
-                descriptor.set_fragment_function(Some(&fragment));
-                let color = descriptor.color_attachments().object_at(0).unwrap();
-                color.set_pixel_format(metal::MTLPixelFormat::BGRA8Unorm);
-                color.set_blending_enabled(true);
-                color.set_source_rgb_blend_factor(metal::MTLBlendFactor::One);
-                color.set_destination_rgb_blend_factor(metal::MTLBlendFactor::OneMinusSourceAlpha);
-                color.set_source_alpha_blend_factor(metal::MTLBlendFactor::One);
-                color
-                    .set_destination_alpha_blend_factor(metal::MTLBlendFactor::OneMinusSourceAlpha);
-                renderer.device.new_render_pipeline_state(&descriptor)
+                let descriptor = MTLRenderPipelineDescriptor::new();
+                let vertex = library
+                    .newFunctionWithName(&NSString::from_str("video_vertex"))
+                    .context("locating video vertex function")?;
+                let fragment = library
+                    .newFunctionWithName(&NSString::from_str("video_fragment"))
+                    .context("locating video fragment function")?;
+                descriptor.setVertexFunction(Some(&vertex));
+                descriptor.setFragmentFunction(Some(&fragment));
+                // SAFETY: Color attachment zero exists in every Metal render pipeline.
+                let color = unsafe { descriptor.colorAttachments().objectAtIndexedSubscript(0) };
+                color.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
+                color.setBlendingEnabled(true);
+                color.setSourceRGBBlendFactor(MTLBlendFactor::One);
+                color.setDestinationRGBBlendFactor(MTLBlendFactor::OneMinusSourceAlpha);
+                color.setSourceAlphaBlendFactor(MTLBlendFactor::One);
+                color.setDestinationAlphaBlendFactor(MTLBlendFactor::OneMinusSourceAlpha);
+                Ok(renderer
+                    .device
+                    .newRenderPipelineStateWithDescriptor_error(&descriptor)?)
             })();
             match pipeline {
                 Ok(p) => state.pipeline = Some(p),
@@ -118,17 +134,28 @@ pub(crate) fn draw(
             i32::from(viewport.width) as f32,
             i32::from(viewport.height) as f32,
         ];
-        encoder.set_render_pipeline_state(state.pipeline.as_ref().unwrap());
-        encoder.set_vertex_bytes(0, 160, uniforms.as_ptr().cast());
-        encoder.set_fragment_bytes(0, 160, uniforms.as_ptr().cast());
-        encoder.set_vertex_bytes(1, 8, viewport.as_ptr().cast());
-        encoder.set_fragment_texture(
-            0,
-            Some(unsafe {
-                metal::TextureRef::from_ptr(objc2::rc::Retained::as_ptr(&texture) as *mut _)
-            }),
-        );
-        encoder.draw_primitives(metal::MTLPrimitiveType::TriangleStrip, 0, 4);
+        encoder.setRenderPipelineState(state.pipeline.as_ref().unwrap());
+        // SAFETY: Metal copies the complete shader uniform arrays. Four generated
+        // vertices sample texture zero; its CoreVideo owner lives until completion.
+        unsafe {
+            encoder.setVertexBytes_length_atIndex(
+                ptr::NonNull::from(&uniforms).cast(),
+                std::mem::size_of_val(&uniforms),
+                0,
+            );
+            encoder.setFragmentBytes_length_atIndex(
+                ptr::NonNull::from(&uniforms).cast(),
+                std::mem::size_of_val(&uniforms),
+                0,
+            );
+            encoder.setVertexBytes_length_atIndex(
+                ptr::NonNull::from(&viewport).cast(),
+                std::mem::size_of_val(&viewport),
+                1,
+            );
+            encoder.setFragmentTexture_atIndex(Some(&texture), 0);
+            encoder.drawPrimitives_vertexStart_vertexCount(MTLPrimitiveType::TriangleStrip, 0, 4);
+        }
         state
             .submitted
             .push((video.frame.clone(), imported.clone()));
@@ -136,6 +163,7 @@ pub(crate) fn draw(
     if !surfaces.iter().any(|s| s.fast_video.is_some()) {
         renderer.fast_video.imported = None;
     }
+    Ok(())
 }
 
 impl MetalRenderer {
@@ -145,8 +173,9 @@ impl MetalRenderer {
         first_surface: usize,
         instance_bindings: &InstanceBindings,
         viewport_size: Size<DevicePixels>,
-        command_encoder: &metal::RenderCommandEncoderRef,
-    ) {
+        command_encoder: &ProtocolObject<dyn MTLRenderCommandEncoder>,
+        surface_textures: &mut Vec<CFRetained<CVMetalTexture>>,
+    ) -> Result<()> {
         crate::fast::video::draw(
             self,
             surfaces,
@@ -154,6 +183,7 @@ impl MetalRenderer {
             instance_bindings,
             viewport_size,
             command_encoder,
-        );
+            surface_textures,
+        )
     }
 }
