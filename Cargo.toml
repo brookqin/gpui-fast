@@ -55,7 +55,7 @@ web-sys = "0.3"
 tendril = "0.5"
 spin = { version = "0.10", default-features = false, features = ["mutex", "spin_mutex", "lock_api"] }
 objc2-security = { version = "0.3.2", default-features = false, features = ["std", "SecBase", "SecItem"] }
-objc2-quartz-core = { version = "=0.3.2", default-features = false, features = ["std", "CALayer", "CAMetalDisplayLink", "CAMetalLayer", "objc2-metal"] }
+objc2-quartz-core = { version = "=0.3.2", default-features = false, features = ["std", "CALayer", "CATransaction", "CAMetalDisplayLink", "CAMetalLayer", "objc2-metal"] }
 dispatch2 = { version = "0.3", default-features = false, features = ["std"] }
 bytemuck = "1"
 bench_metrics = { path = "crates/bench_metrics" }
@@ -182,6 +182,7 @@ objc2-ui-kit = { version = "0.3.2", default-features = false, features = [
 ] }
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
     "NSAlert",
+    "NSAnimationContext",
     "NSAppearance",
     "NSApplication",
     "NSButton",
