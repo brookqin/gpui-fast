@@ -659,8 +659,8 @@ pub(crate) struct MacWindowState {
     pub(crate) fast_chrome: crate::fast::window_chrome::NativeTitlebar,
     pub(crate) native_view: NonNull<AnyObject>,
     pub(crate) fast_composition: crate::fast::composition::MacComposition,
-    blurred_view: Option<*mut AnyObject>,
-    background_appearance: WindowBackgroundAppearance,
+    pub(crate) blurred_view: Option<*mut AnyObject>,
+    pub(crate) background_appearance: WindowBackgroundAppearance,
     cursor_style: CursorStyle,
     cursor_visible: Arc<AtomicBool>,
     frame_source: FrameSource,
@@ -685,7 +685,7 @@ pub(crate) struct MacWindowState {
     pub(crate) traffic_light_position: Option<Point<Pixels>>,
     traffic_light_frames: Option<TrafficLightFrames>,
     pre_fullscreen_traffic_light_frames: Option<TrafficLightFrames>,
-    transparent_titlebar: bool,
+    pub(crate) transparent_titlebar: bool,
     previous_modifiers_changed_event: Option<PlatformInput>,
     keystroke_for_do_command: Option<Keystroke>,
     do_command_handled: Option<bool>,
@@ -2008,6 +2008,7 @@ impl PlatformWindow for MacWindow {
         this.foreground_executor
             .spawn(async move {
                 if_window_not_closed(closed, || unsafe {
+                    crate::fast::window_chrome::prepare_fullscreen_toggle(window);
                     let _: () = msg_send![window, toggleFullScreen: ptr::null_mut::<AnyObject>()];
                 })
             })
@@ -3131,7 +3132,7 @@ extern "C" fn window_will_enter_fullscreen(this: &AnyObject, _: Sel, _: *mut Any
             let _: () = msg_send![lock.native_window, setTitlebarAppearsTransparent: Bool::NO];
         }
     }
-    crate::fast::window_chrome::hide_native_titlebar(&mut lock);
+    crate::fast::window_chrome::suspend_blur(&mut lock);
 }
 
 extern "C" fn window_will_exit_fullscreen(this: &AnyObject, _: Sel, _: *mut AnyObject) {
@@ -3152,7 +3153,7 @@ extern "C" fn window_will_exit_fullscreen(this: &AnyObject, _: Sel, _: *mut AnyO
     }
 
     lock.move_traffic_light();
-    crate::fast::window_chrome::hide_native_titlebar(&mut lock);
+    crate::fast::window_chrome::suspend_blur(&mut lock);
 }
 
 extern "C" fn window_did_fail_to_exit_fullscreen(this: &AnyObject, _: Sel, _: *mut AnyObject) {
@@ -3160,7 +3161,7 @@ extern "C" fn window_did_fail_to_exit_fullscreen(this: &AnyObject, _: Sel, _: *m
     let mut lock = window_state.as_ref().lock();
     lock.is_exiting_fullscreen = false;
     lock.restore_traffic_light();
-    crate::fast::window_chrome::hide_native_titlebar(&mut lock);
+    crate::fast::window_chrome::suspend_blur(&mut lock);
 }
 
 extern "C" fn window_did_exit_fullscreen(this: &AnyObject, _: Sel, _: *mut AnyObject) {
@@ -3173,7 +3174,7 @@ extern "C" fn window_did_exit_fullscreen(this: &AnyObject, _: Sel, _: *mut AnyOb
     // Keep using the native windowed frames when restoring them on the next entry.
     lock.traffic_light_frames = lock.pre_fullscreen_traffic_light_frames.take();
     lock.move_traffic_light();
-    crate::fast::window_chrome::restore_native_titlebar(&mut lock);
+    crate::fast::window_chrome::restore_blur(&mut lock);
 }
 
 pub(crate) fn is_macos_version_at_least(version: NSOperatingSystemVersion) -> bool {
