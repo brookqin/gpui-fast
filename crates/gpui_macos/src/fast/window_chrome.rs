@@ -159,11 +159,17 @@ fn fullscreen_options(
     }
 }
 
-/// Views are retained because AppKit can reparent or replace the titlebar while
-/// crossing Spaces. Restore every view we hid, including the old container.
+/// Preserve the window's actual backing until fullscreen has fully ended.
+/// The toolbar and standard buttons remain owned and animated by AppKit.
 #[derive(Default)]
 pub(crate) struct NativeTitlebar {
-    hidden: Vec<(objc2::rc::Retained<objc2_app_kit::NSView>, bool)>,
+    backdrop: Option<OpaqueBackdrop>,
+}
+
+struct OpaqueBackdrop {
+    color: objc2::rc::Retained<objc2_app_kit::NSColor>,
+    opaque: bool,
+    blur: Option<(objc2::rc::Retained<objc2_app_kit::NSView>, bool)>,
 }
 
 fn owns_titlebar(window: &objc2_app_kit::NSWindow) -> bool {
@@ -172,44 +178,78 @@ fn owns_titlebar(window: &objc2_app_kit::NSWindow) -> bool {
     })
 }
 
-pub(crate) fn hide_native_titlebar(state: &mut crate::window::MacWindowState) {
-    // SAFETY: Lifecycle hooks run on the main thread with this live window.
-    let window = unsafe { &*state.native_window.cast::<objc2_app_kit::NSWindow>() };
-    if !owns_titlebar(window) {
-        return;
-    }
-    let _layout = ImmediateLayout::new();
-    // Upstream makes titlebars opaque during fullscreen on macOS 15.3+.
-    // Our empty toolbar must never paint a second background over GPUI.
-    window.setTitlebarAppearsTransparent(true);
-    let Some(button) = window.standardWindowButton(objc2_app_kit::NSWindowButton::CloseButton)
-    else {
-        return;
-    };
-    // Same standard-button ancestry used by GPUI's existing geometry handling;
-    // no private class names or selectors. Hiding preserves the 52 px layout.
-    let container = unsafe { button.superview().and_then(|view| view.superview()) };
-    if let Some(container) = container {
-        if !state
-            .fast_chrome
-            .hidden
-            .iter()
-            .any(|(view, _)| *view == container)
-        {
-            let was_hidden = container.isHidden();
-            state
-                .fast_chrome
-                .hidden
-                .push((container.clone(), was_hidden));
-        }
-        container.setHidden(true);
-    }
+/// Called before application-triggered toggleFullScreen:, before AppKit can
+/// take its transition snapshot. The will-enter/exit callbacks cover system
+/// controls too. Repeated callbacks must not overwrite the saved backdrop.
+pub(crate) fn prepare_fullscreen_toggle(window: *mut objc2::runtime::AnyObject) {
+    // SAFETY: Called on the main thread after the existing closed-window guard.
+    let state = unsafe { crate::window::get_window_state(&*window) };
+    suspend_blur(&mut state.lock());
+    CATransaction::flush();
 }
 
-pub(crate) fn restore_native_titlebar(state: &mut crate::window::MacWindowState) {
+pub(crate) fn suspend_blur(state: &mut crate::window::MacWindowState) {
+    use objc2_app_kit::{NSColor, NSView, NSWindow};
+    // SAFETY: Lifecycle hooks run on the main thread with this live window.
+    let window = unsafe { &*state.native_window.cast::<NSWindow>() };
+    if !owns_titlebar(window)
+        || state.background_appearance != gpui::WindowBackgroundAppearance::Blurred
+    {
+        return;
+    }
     let _layout = ImmediateLayout::new();
-    for (view, was_hidden) in state.fast_chrome.hidden.drain(..) {
-        view.setHidden(was_hidden);
+    if state.fast_chrome.backdrop.is_none() {
+        let blur = state
+            .blurred_view
+            .and_then(|view| {
+                // SAFETY: The view is installed in the live window. Retain it until
+                // restoration, even if a caller replaces the background meanwhile.
+                unsafe { objc2::rc::Retained::retain(view.cast::<NSView>()) }
+            })
+            .map(|view| {
+                let hidden = view.isHidden();
+                (view, hidden)
+            });
+        state.fast_chrome.backdrop = Some(OpaqueBackdrop {
+            color: window.backgroundColor(),
+            opaque: window.isOpaque(),
+            blur,
+        });
+    }
+    if let Some((view, _)) = state
+        .fast_chrome
+        .backdrop
+        .as_ref()
+        .and_then(|saved| saved.blur.as_ref())
+    {
+        view.setHidden(true);
+    }
+    // Keep the GPU surface's alpha blending: it now composites onto a solid
+    // native backing instead of a live behind-window visual effect. Marking
+    // the Metal layer opaque would turn its transparent clear pixels black.
+    window.setBackgroundColor(Some(
+        &NSColor::windowBackgroundColor().colorWithAlphaComponent(1.),
+    ));
+    window.setOpaque(true);
+    // This flag suppresses the *extra* native toolbar background; the backing
+    // below GPUI is opaque, so no desktop translucency remains.
+    window.setTitlebarAppearsTransparent(true);
+}
+
+pub(crate) fn restore_blur(state: &mut crate::window::MacWindowState) {
+    let Some(saved) = state.fast_chrome.backdrop.take() else {
+        return;
+    };
+    let _layout = ImmediateLayout::new();
+    // SAFETY: The completion/failure callback holds the live window state.
+    let window = unsafe { &*state.native_window.cast::<objc2_app_kit::NSWindow>() };
+    if state.background_appearance == gpui::WindowBackgroundAppearance::Blurred {
+        window.setBackgroundColor(Some(&saved.color));
+        window.setOpaque(saved.opaque);
+        window.setTitlebarAppearsTransparent(state.transparent_titlebar);
+        if let Some((view, hidden)) = saved.blur {
+            view.setHidden(hidden);
+        }
     }
 }
 
@@ -220,7 +260,7 @@ extern "C" fn did_enter(
 ) {
     // SAFETY: This is the registered NSWindow delegate callback.
     let state = unsafe { crate::window::get_window_state(&*this) };
-    hide_native_titlebar(&mut state.lock());
+    suspend_blur(&mut state.lock());
 }
 
 extern "C" fn failed_to_enter(
@@ -230,5 +270,5 @@ extern "C" fn failed_to_enter(
 ) {
     // SAFETY: This is the registered NSWindow delegate callback.
     let state = unsafe { crate::window::get_window_state(&*this) };
-    restore_native_titlebar(&mut state.lock());
+    restore_blur(&mut state.lock());
 }
